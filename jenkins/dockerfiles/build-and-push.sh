@@ -76,7 +76,7 @@ for c in {gcc,clang}-*
 do
   tag=${tag_px}build-$c
   echo_build $tag
-  docker build ${quiet} ${cache_args} $c -t $tag
+  cat $c/Dockerfile | sed 's#FROM kernelci\/#FROM '"${tag_px}"'#' | docker build ${quiet} ${cache_args} -t $tag -
   if [ "x${push}" == "xtrue" ]
   then
     echo_push $tag

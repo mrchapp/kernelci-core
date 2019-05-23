@@ -60,19 +60,38 @@ def _get_last_commit_file_name(config):
 
 
 def _upload_files(api, token, path, input_files):
-    headers = {
-        'Authorization': token,
-    }
-    data = {
-        'path': path,
-    }
-    files = {
-        'file{}'.format(i): (name, fobj)
-        for i, (name, fobj) in enumerate(input_files.iteritems())
-    }
-    url = urlparse.urljoin(api, 'upload')
-    resp = requests.post(url, headers=headers, data=data, files=files)
-    resp.raise_for_status()
+    if api.startswith('s3://'):
+        #s3_bucket = api.replace("http://", "s3://").replace("https://", "s3://")
+        acl = '--acl public-read'
+        content_type = ''
+        for filename, contents in input_files.items():
+            if isinstance(path, tuple):
+                path = list(path)[0]
+            if filename.startswith('./'):
+                filename = filename[2:]
+            remote_path = "{}/{}/{}".format(api, path, filename)
+            if isinstance(contents, str):
+                with open(filename, 'w') as outfile:
+                    outfile.write(contents)
+                content_type = '--content-type text/plain'
+            if isinstance(contents, file):
+                filename = contents.name
+            command_line = "aws s3 cp {} {} {} {}".format(filename, remote_path, acl, content_type)
+            cmd_output = shell_cmd(command_line)
+    else:
+        headers = {
+            'Authorization': token,
+        }
+        data = {
+            'path': path,
+        }
+        files = {
+            'file{}'.format(i): (name, fobj)
+            for i, (name, fobj) in enumerate(input_files.iteritems())
+        }
+        url = urlparse.urljoin(api, 'upload')
+        resp = requests.post(url, headers=headers, data=data, files=files)
+        resp.raise_for_status()
 
 
 def get_last_commit(config, storage):
@@ -607,6 +626,8 @@ def push_kernel(kdir, api, token, install='_install_'):
 
 def publish_kernel(kdir, install='_install_', api=None, token=None,
                    json_path=None):
+    if api.startswith('s3://'):
+        return True
     install_path = os.path.join(kdir, install)
 
     with open(os.path.join(install_path, 'build.json')) as f:
